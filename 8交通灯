@@ -1,0 +1,286 @@
+/****************************** (C) COPYRIGHT 2013  **************************
+* 文  件  名      : 交通灯控制系统.C
+* 作      者      : SZJ
+* 版      本      : V1.0
+* 日      期      : 2013/08/03
+* 主  控  MCU     : AT89S52
+* 主      频      : 11.0592MHz
+* 编  译  器      : Keil C51 V4.22
+*********************************************************************************/
+#include<reg51.h>
+#define  uchar  unsigned  char
+#define  uint   unsigned   int
+sbit   RED_DONGXI    =  P1^0;//东西方向红灯
+sbit   YELLOW_DONGXI =  P1^1;//东西方向黄灯
+sbit   GREEN_DONGXI  =  P1^2;//东西方向绿灯
+sbit   RED_NANBEI    =  P1^3;//南北方向红灯
+sbit   YELLOW_NANBEI =  P1^4;//南北方向黄灯
+sbit   GREEN_NANBEI  =  P1^5;//南北方向绿灯
+sbit   DXweixuan1    =  P1^6;//东西方向高位数码管位选1
+sbit   DXweixuan2    =  P1^7;//东西方向低位数码管位选2
+sbit   NBweixuan1    =  P3^0;//南北方向高位数码管位选1
+sbit   NBweixuan2    =  P3^1;//南北方向低位数码管位选2
+uint aa; 
+uint shi1,ge1;    			//shi1为东西方向数码管高位，ge1为东西方向数码管低位
+uint shi2,ge2;    			//shi2为南北方向数码管高位，ge2为南北方向数码管低位
+
+uint code table[]={0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90};
+void  delay(uint z);
+void  init(uint a);
+void  display(uint shi1,uint ge1,uint shi2,uint ge2);
+void  xtimer0();
+void  init1();
+void  init2();
+void  init3();
+void  init4();
+void  init5();
+void  xint1();
+void  xint0();
+//void  LED_ON();
+//void  LED_OFF();
+
+void main()
+{
+	P0=0xFF;
+	P1=0xFF;
+	P2=0x00;
+   	P3=0xFF;
+	EA=1;
+	EX0=1;          //开外部中断0
+	IT0=0;          //外部中断0电平触发方式
+	init1();        //第一个状态：东西、南北方向均亮红灯5S 
+ while(1)
+  {
+  		init2();    //第二个状态：东西方向亮绿灯25~0S，南北方向红灯亮30S~5S;
+ 		init3();    //第三个状态：东西方向绿灯变为黄灯闪5次、南北方向红灯亮5S
+ 		init4();    //第四个状态：南北方向亮绿灯25~0S，东西方向红灯亮30~5S；
+	 	init5();    //第五个状态：南北方向绿灯变为黄灯闪5次、东西方向红灯亮5S
+  }
+}
+void  init1()        //第一个状态：东西、南北方向均亮红灯5S 
+{
+	uint temp;
+	temp=5;
+	TMOD=0x01;
+	TH0=(65535-50000)/256;
+	TL0=(65535-50000)%256;
+	EA=1;
+	ET0=1;
+	TR0=1;
+	while(1)
+	{
+		RED_DONGXI=0;              //第一个状态东西、南北均亮红灯5S 
+   		RED_NANBEI=0;
+		GREEN_DONGXI=1;
+		GREEN_NANBEI=1;
+		YELLOW_DONGXI=1;
+		YELLOW_NANBEI=1;
+		if(aa==20)//定时20*50MS=1S
+		{
+			aa=0;
+			temp--;		
+		}
+			shi1=shi2=temp/10;
+			ge1=ge2=temp%10;
+			if(temp==0)
+			{
+				temp=5;
+				break;	
+		}
+		display(ge1,shi1,ge2,shi2);
+	}
+}
+ void  init2()                 //第二个状态：东西方向亮绿灯25~0S，南北方向红灯亮30S~5S;
+{
+	uint temp;
+	temp=26;
+	TMOD=0x01;
+	TH0=(65535-50000)/256;
+	TL0=(65535-50000)%256;
+	EA=1;
+	ET0=1;
+	TR0=1;
+	while(1)
+	{	 
+		RED_DONGXI=1;
+		RED_NANBEI=0;
+		GREEN_DONGXI=0; 
+		GREEN_NANBEI=1;
+		YELLOW_DONGXI=1;
+	   	YELLOW_NANBEI=1;
+		if(aa==20)                 //定时20*50MS=1S
+		{
+			aa=0;
+			temp--;
+			shi1=temp/10;          
+			ge1=temp%10;
+			shi2=(temp+5)/10;
+			ge2=(temp+5)%10;
+			if(temp==0)
+			{
+				temp=26;
+				break;
+			}
+		}
+			display(ge1,shi1,ge2,shi2);
+	}
+}
+void  init3()                    //第三个状态：东西方向绿灯变为黄灯闪5次、南北方向红灯亮5S
+{
+	uint temp;
+	temp=6;
+	TMOD=0x01;
+	TH0=(65535-50000)/256;
+	TL0=(65535-50000)%256;
+	EA=1;
+	ET0=1;
+	TR0=1;
+	while(1)
+	{
+		RED_NANBEI=0;
+		GREEN_DONGXI=1;
+		if(aa==20)                //定时20*50MS=1S
+		{
+			aa=0;
+			temp--;
+			YELLOW_DONGXI=~YELLOW_DONGXI;
+			shi1=temp/10;
+			shi2=shi1;
+			ge1=temp%10;
+			ge2=ge1;	
+		}
+			if(temp==0)
+			{
+				temp=6;
+				break;
+			}
+			display(ge1,shi1,ge2,shi2);
+	}
+}
+void  init4()                //第四个状态：南北方向亮绿灯25~0S，东西方向红灯亮30~5S；
+{
+	uint temp;
+	temp=26;
+	TMOD=0x01;
+	TH0=(65535-50000)/256;
+	TL0=(65535-50000)%256;
+	EA=1;
+	ET0=1;
+	TR0=1;
+	while(1)
+	{	
+		RED_DONGXI=0; 
+		RED_NANBEI=1;
+		YELLOW_DONGXI=1;       
+   		GREEN_NANBEI=0;
+		if(aa==20)          //定时20*50MS=1S
+		{
+			aa=0;
+			temp--;
+		
+			shi2=temp/10;
+			ge2=temp%10;
+			shi1=(temp+5)/10;
+			ge1=(temp+5)%10;	
+		if(temp==0)
+			{
+				temp=26;
+				break;
+			}
+		}
+		display(ge1,shi1,ge2,shi2);
+	}
+}
+void  init5()                 //第五个状态：南北方向绿灯变为黄灯闪5次、东西方向红灯亮5S
+{
+	uint temp;
+	temp=6;
+	TMOD=0x01;
+	TH0=(65535-50000)/256;
+	TL0=(65535-50000)%256;
+	EA=1;
+	ET0=1;
+	TR0=1;
+	while(1)
+	{
+		RED_NANBEI=1;
+		RED_DONGXI=0;
+		GREEN_DONGXI=1;
+		GREEN_NANBEI=1;
+		if(aa==20)              //定时20*50MS=1S
+		{
+			aa=0;
+			temp--;
+			YELLOW_NANBEI=~YELLOW_NANBEI;
+		
+			shi1=temp/10;
+			shi2=shi2;
+			ge1=temp%10;
+			ge2=ge1;
+		if(temp==0)
+			{
+				temp=6;
+				break;
+			} 	
+		}
+		display(ge1,shi1,ge2,shi2);
+	}
+}
+
+void  display(uint ge1,uint shi1,uint ge2,uint shi2)      //显示子程序
+{
+	DXweixuan1=0;         //显示东西方向数码管高位                           
+	DXweixuan2=1;
+	NBweixuan1=1;
+	NBweixuan2=1;
+	P0=table[shi1];
+	delay(5);
+	DXweixuan1=1;         //显示东西方向数码管低位   
+	DXweixuan2=0;
+	NBweixuan1=1;
+	NBweixuan2=1;
+	P0=table[ge1];
+	delay(5);
+	DXweixuan1=1;         //显示南北方向数码管高位   
+	DXweixuan2=1;
+	NBweixuan1=0;
+	NBweixuan2=1;
+	P0=table[shi2];
+	delay(5);
+	DXweixuan1=1;         //显示南北方向数码管低位 
+	DXweixuan2=1;
+	NBweixuan1=1;
+	NBweixuan2=0;
+	P0=table[ge2];
+	delay(5);
+}
+void  xint0()  interrupt  0           //外部中断0，+髂媳狈较蚓斓啤牍芡Ｖ瓜允?
+{
+	RED_NANBEI=0;
+	RED_DONGXI=0;
+	GREEN_NANBEI=1;
+	GREEN_DONGXI=1;
+   	YELLOW_NANBEI=1;
+	YELLOW_DONGXI=1;
+	P0=0x0FF;
+	NBweixuan1=0;
+	NBweixuan2=0;
+	DXweixuan1=0;
+	DXweixuan2=0;
+	delay(2);
+	return ;
+	}
+
+
+void  xtimer0()  interrupt 1          //定时器0中断子程序，每50ms中断一次，中断20次正好1S
+{
+	TH0=(65535-50000)/256;
+	TL0=(65535-50000)%256;
+	aa++;
+}
+
+void  delay(uint z)                   //延时子程序
+{uint x,y;
+	for(x=0;x<z;x++)
+		for(y=0;y<110;y++);
+}
